@@ -59,7 +59,7 @@ class KudosGiver:
         """
         Login using email and password with human-like behavior.
         """
-        base_url = os.environ.get("BASE_URL", "https://www.strava.com")
+        base_url = os.environ.get("BASE_URL", "https://www.strava.com").rstrip("/")
         login_url = f"{base_url}/login"
 
         print(f"Navigating to {login_url}...")
@@ -75,52 +75,73 @@ class KudosGiver:
         except Exception:
             pass
 
-        # Type email with human-like delays
-        print("Filling email...")
-        email_field = self.page.get_by_role("textbox", name="email")
-        email_field.click()
-        human_delay(0.3, 0.7)
-        email_field.type(self.EMAIL, delay=human_typing_delay())
-
-        human_delay(0.5, 1.0)
-
-        # Submit email first. Strava now defaults to a passwordless
-        # one-time-code flow, so the password field does not exist yet.
-        print("Submitting email...")
-        self.page.get_by_role("button", name="Log In").click()
-        human_delay(1.0, 2.0)
-
-        # Switch back to password login, which reveals the password field.
         try:
-            self.page.get_by_role("button", name="Use password instead").click(timeout=5000)
+            # Type email with human-like delays
+            print("Filling email...")
+            email_field = self.page.get_by_role("textbox", name="email")
+            email_field.click()
+            human_delay(0.3, 0.7)
+            email_field.type(self.EMAIL, delay=human_typing_delay())
+
             human_delay(0.5, 1.0)
-        except Exception:
-            pass
 
-        # Type password with human-like delays
-        print("Filling password...")
-        password_field = self.page.get_by_role("textbox", name="password")
-        password_field.click()
-        human_delay(0.3, 0.7)
-        password_field.type(self.PASSWORD, delay=human_typing_delay())
+            # Submit email first. Strava now defaults to a passwordless
+            # one-time-code flow, so the password field does not exist yet.
+            print("Submitting email...")
+            self.page.get_by_role("button", name="Log In").click()
+            human_delay(1.0, 2.0)
 
-        human_delay(0.5, 1.5)
+            # Switch back to password login, which reveals the password field.
+            # Only click through if the password field isn't already showing.
+            if self.page.get_by_role("textbox", name="password").count() == 0:
+                print("Switching to password login...")
+                self.page.get_by_role("button", name="Use password instead").click(timeout=15000)
+                human_delay(0.5, 1.0)
 
-        # Click login button
-        print("Clicking login...")
-        self.page.get_by_role("button", name="Log In").click()
+            # Type password with human-like delays
+            print("Filling password...")
+            password_field = self.page.get_by_role("textbox", name="password")
+            password_field.click()
+            human_delay(0.3, 0.7)
+            password_field.type(self.PASSWORD, delay=human_typing_delay())
 
-        # Wait for navigation and check for login success
-        human_delay(2.0, 4.0)
+            human_delay(0.5, 1.5)
+
+            # Click login button
+            print("Clicking login...")
+            self.page.get_by_role("button", name="Log In").click()
+
+            # Wait for navigation and check for login success
+            human_delay(2.0, 4.0)
+        except Exception as e:
+            self._dump_debug_state("login_failed")
+            raise Exception("Login flow broke before reaching the success check. Check login_failed.png/.txt for details.") from e
 
         # Check if login was successful by looking for common error indicators
         if self._check_login_success():
             print("---Logged in successfully!---")
             self._run_with_retries(func=self._get_page_and_own_profile)
         else:
-            # Take a screenshot for debugging
-            self.page.screenshot(path="login_failed.png")
-            raise Exception("Login failed. Check login_failed.png for details.")
+            self._dump_debug_state("login_failed")
+            raise Exception("Login failed. Check login_failed.png/.txt for details.")
+
+    def _dump_debug_state(self, name: str) -> None:
+        """
+        Save a screenshot and the page's visible text to help diagnose failures
+        (e.g. CAPTCHA challenges) that only show up in CI.
+        """
+        try:
+            self.page.screenshot(path=f"{name}.png")
+        except Exception:
+            print(f"Could not save screenshot to {name}.png")
+        try:
+            print(f"---PAGE TEXT AT FAILURE ({self.page.url})---")
+            print(self.page.locator("body").inner_text()[:3000])
+            with open(f"{name}.txt", "w") as f:
+                f.write(f"URL: {self.page.url}\n\n")
+                f.write(self.page.content())
+        except Exception:
+            print("Could not capture page text.")
 
     def _check_login_success(self) -> bool:
         """Check if login was successful."""
@@ -172,7 +193,7 @@ class KudosGiver:
         """
         Limit activities count by GET parameter and get own profile ID.
         """
-        base_url = os.environ.get("BASE_URL", "https://www.strava.com")
+        base_url = os.environ.get("BASE_URL", "https://www.strava.com").rstrip("/")
         dashboard_url = f"{base_url}/dashboard?num_entries={self.num_entries}"
 
         self.page.goto(dashboard_url, wait_until="networkidle")

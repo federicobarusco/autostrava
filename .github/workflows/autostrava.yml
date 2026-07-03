@@ -14,7 +14,7 @@ on:
       - poetry.lock
 
 env:
-  BASE_URL: https://www.strava.com/
+  BASE_URL: https://www.strava.com
   PYTHON_VERSION: "3.12"
   STRAVA_EMAIL: ${{ secrets.STRAVA_EMAIL }}
   STRAVA_PASSWORD: ${{ secrets.STRAVA_PASSWORD }}
@@ -31,3 +31,11 @@ jobs:
       - run: poetry install --no-root
       - run: poetry run playwright install --with-deps firefox
       - run: poetry run python -m autostrava
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: login-debug
+          path: |
+            login_failed.png
+            login_failed.txt
+          retention-days: 5
