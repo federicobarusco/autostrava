@@ -1,41 +1,93 @@
 # Strava Kudos Giver 👍👍👍
 
-[![Python 3.9](https://img.shields.io/badge/python-3.9-blue.svg)](https://www.python.org/downloads/release/python-370/) ![Github Actions](https://github.com/isaac-chung/strava-kudos/actions/workflows/give_kudos.yml/badge.svg)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/release/python-312/)
 
-A Python tool to automatically give [Strava](https://www.strava.com) Kudos to recent activities on your feed. There are a few repos that uses JavaScript like [strava-kudos-lambda](https://github.com/mjad-org/strava-kudos-lambda) and [strava-kudos](https://github.com/rnvo/strava-kudos). 
-
-The repo is set up so that the script runs on a set schedule via Github Actions. Github suggests in their [docs](https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#schedule) to not run cron jobs at the start of every hour to avoid delays so minute30 was chosen here. Feel free to change it to whenever you want. There is also a `max_run_duration` parameter which is 9 minutes by default so that we don't exceed the [monthly Github Action free tier minutes](https://docs.github.com/en/billing/managing-billing-for-github-actions/about-billing-for-github-actions#included-storage-and-minutes) when the action is triggered a few times a day.
+A Python tool to automatically give [Strava](https://www.strava.com) Kudos to recent activities on your feed using browser automation.
 
 ## 🏃 Usage
-1. Fork the repo
-2. Setup the environment variables in secrets
-3. Give kudos automatically!
 
-Alternatively, you can run the script manually with
+### Local Execution
+
+```bash
+# Install dependencies
+poetry install
+
+# Install Playwright browsers
+poetry run playwright install firefox
+
+# Set environment variables
+export STRAVA_EMAIL=your_email@example.com
+export STRAVA_PASSWORD=your_password
+export BASE_URL=https://www.strava.com
+
+# Run the script
+poetry run python -m autostrava
 ```
-python3 give_kudos.py
+
+### Debug Mode
+
+If login is failing, run in debug mode to see the browser:
+
+```bash
+export AUTOSTRAVA_DEBUG=1
+poetry run python -m autostrava
 ```
 
-## 🛠️Setup
+This will open a visible browser window so you can see what's happening during login.
 
-### Playwright
-[Playwright](https://github.com/microsoft/playwright-python) is used, so be sure to follow instructions to install it properly. 
+## 🛠️ Setup
+
+### Prerequisites
+
+- Python 3.12+
+- [Poetry](https://python-poetry.org/) for dependency management
+- Firefox (installed via Playwright)
 
 ### Environment Variables
 
-Set the environment variables for your email and password as follows:
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `STRAVA_EMAIL` | Yes | Your Strava login email |
+| `STRAVA_PASSWORD` | Yes | Your Strava password |
+| `BASE_URL` | No | Strava base URL (default: `https://www.strava.com`) |
+| `AUTOSTRAVA_DEBUG` | No | Set to `1` to run with visible browser |
+
+### GitHub Actions
+
+1. Fork the repo
+2. Go to Settings → Security → Secrets and Variables → Actions
+3. Add `STRAVA_EMAIL` and `STRAVA_PASSWORD` as repository secrets
+4. The action runs automatically on schedule
+
+## 🛡️ Anti-Bot Detection
+
+This project uses several techniques to avoid bot detection:
+
+- **Playwright Stealth**: Hides automation signals from the browser
+- **Human-like delays**: Random delays between actions (typing, clicking, scrolling)
+- **Realistic scrolling**: Variable scroll patterns that mimic human behavior
+- **Login verification**: Detects CAPTCHA and login failures with screenshots
+
+### If Login Fails
+
+1. **Run in debug mode** (`AUTOSTRAVA_DEBUG=1`) to see what's happening
+2. **Check `login_failed.png`** - A screenshot is saved when login fails
+3. **Manual CAPTCHA**: If Strava shows a CAPTCHA, you may need to log in manually once to "trust" your IP
+4. **Try from a different IP**: Some IPs may be flagged by Strava's anti-bot systems
+5. **Wait and retry**: Strava may temporarily block automated access; try again later
+
+### Known Limitations
+
+- Strava actively detects and blocks automation tools
+- CAPTCHA challenges cannot be bypassed automatically
+- Running from cloud IPs (like GitHub Actions) may trigger additional verification
+
+## 🔬 Testing
+
+```bash
+poetry run pytest
 ```
-export STRAVA_EMAIL=YOUR_EMAIL
-export STRAVA_PASSWORD=YOUR_PASSWORD
-```
 
-### Github Actions
-To add secrets for GH actions, navigate to Settings -> Security -> Secrets and Variables -> Actions. Enter your email and password within `Repository Secrets`.
+## 📝 License
 
-## 🔬Testing
-Manual testing was done in Python 3.9.10 on Ubuntu 20.04.6. 
-
-## Contributions
-Let me know if you wish to add anything or if there are any issues!
-
-[![ForTheBadge built-with-love](http://ForTheBadge.com/images/badges/built-with-love.svg)](https://GitHub.com/Naereen/)
+MIT License - see [LICENSE](LICENSE) for details.

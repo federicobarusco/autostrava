@@ -9,6 +9,7 @@ readme = "README.md"
 python = "^3.12"
 pytest-playwright = "^0.6.2"
 playwright = "^1.49.0"
+playwright-stealth = "^2.0.3"
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.13.0"

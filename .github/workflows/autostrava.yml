@@ -1,31 +1,33 @@
 name: Autostrava
 
-# on:
-#   schedule:
-#     - cron: "30 6-23/3 * * *"
-#   push:
-#     branches:
-#       - main
-#     paths:
-#       - .github/workflows/autostrava.yml
-#       - autostrava/**
+on:
+  schedule:
+    - cron: "30 6-23/3 * * *"
+  workflow_dispatch: {}
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/autostrava.yml
+      - autostrava/**
+      - pyproject.toml
+      - poetry.lock
 
 env:
   BASE_URL: https://www.strava.com/
-  PYTHON_VERSION: 3.12.7
+  PYTHON_VERSION: "3.12"
   STRAVA_EMAIL: ${{ secrets.STRAVA_EMAIL }}
   STRAVA_PASSWORD: ${{ secrets.STRAVA_PASSWORD }}
-  STRAVA_PROFILE_ID: ${{ secrets.STRAVA_PROFILE_ID }}
 jobs:
   run-kudos-cron:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v3 
-      - uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - run: pip install -r requirements.txt
-      - run: playwright install
-      - run: playwright install-deps 
-      - run: python -m autostrava
+      - run: pip install poetry
+      - run: poetry install --no-root
+      - run: poetry run playwright install --with-deps firefox
+      - run: poetry run python -m autostrava
