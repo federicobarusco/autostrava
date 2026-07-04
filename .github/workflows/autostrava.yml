@@ -1,8 +1,8 @@
 name: Autostrava
 
 on:
-  schedule:
-    - cron: "30 6-23/3 * * *"
+  # schedule:
+  #   - cron: "30 6-23/3 * * *"
   workflow_dispatch: {}
   push:
     branches:
@@ -30,7 +30,21 @@ jobs:
       - run: pip install poetry
       - run: poetry install --no-root
       - run: poetry run playwright install --with-deps firefox
+      # Reuse the logged-in session's cookies across runs so we only hit
+      # Strava's rate-limited login/OTP endpoints when the session actually
+      # expires, instead of on every scheduled run.
+      - uses: actions/cache/restore@v4
+        with:
+          path: storage_state.json
+          key: strava-session-${{ github.run_id }}
+          restore-keys: |
+            strava-session-
       - run: poetry run python -m autostrava
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: storage_state.json
+          key: strava-session-${{ github.run_id }}
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

@@ -3,6 +3,11 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# autostrava runtime artifacts (session cookies are sensitive, treat like a secret)
+storage_state.json
+login_failed.png
+login_failed.txt
+
 # C extensions
 *.so
 

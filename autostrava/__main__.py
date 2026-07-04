@@ -3,7 +3,15 @@ import random
 import time
 
 from playwright.sync_api import sync_playwright
-from playwright_stealth import Stealth
+from playwright_stealth import ALL_EVASIONS_DISABLED_KWARGS, Stealth
+
+# playwright-stealth's default evasions target Chromium (they inject a fake
+# window.chrome object and override navigator.vendor/platform to Chrome-like
+# values). Applied to Firefox, those overrides are internally inconsistent
+# with a real Firefox fingerprint and stand out more than they hide. Firefox's
+# only actual automation tell is navigator.webdriver, so that's the one
+# evasion we keep.
+FIREFOX_STEALTH_KWARGS = dict(ALL_EVASIONS_DISABLED_KWARGS, navigator_webdriver=True)
 
 
 def human_delay(min_seconds: float = 0.5, max_seconds: float = 2.0) -> None:
@@ -34,26 +42,70 @@ class KudosGiver:
         self.start_time = time.time()
         self.num_entries = 100
         self.web_feed_entry_pattern = "[data-testid=web-feed-entry]"
+        self.session_state_path = os.environ.get("SESSION_STATE_PATH", "storage_state.json")
 
         p = sync_playwright().start()
 
         # Launch Firefox with more realistic settings
-        self.browser = p.firefox.launch(
-            headless=headless,
-            args=["--disable-blink-features=AutomationControlled"],
-        )
+        self.browser = p.firefox.launch(headless=headless)
 
-        # Create context with realistic viewport and user agent
-        context = self.browser.new_context(
-            viewport={"width": 1920, "height": 1080},
-            locale="en-US",
-            timezone_id="Europe/Rome",
-        )
+        # Reuse a saved session (cookies) if we have one, so we don't have to
+        # hit Strava's rate-limited login endpoints on every run.
+        context_kwargs = {"viewport": {"width": 1920, "height": 1080}}
+        if os.path.exists(self.session_state_path):
+            print(f"Loading saved session from {self.session_state_path}")
+            context_kwargs["storage_state"] = self.session_state_path
+        context = self.browser.new_context(**context_kwargs)
 
         self.page = context.new_page()
 
-        # Apply stealth mode to hide automation signals
-        Stealth().apply_stealth_sync(self.page)
+        # Hide the one real Firefox automation tell (navigator.webdriver).
+        Stealth(**FIREFOX_STEALTH_KWARGS).apply_stealth_sync(self.page)
+
+    def ensure_logged_in(self) -> None:
+        """
+        Reuse a saved session if it's still valid, otherwise fall back to a
+        full email/password login. Avoids hitting Strava's rate-limited
+        login endpoints (e.g. the OTP request) on every scheduled run.
+        """
+        if os.path.exists(self.session_state_path):
+            print("Checking if the saved session is still valid...")
+            if self._is_logged_in():
+                print("Reusing existing session, skipping login.")
+                self._run_with_retries(func=self._get_page_and_own_profile)
+                return
+            print("Saved session has expired or is invalid.")
+            # Stale/corrupt cookies can also break the fresh login page
+            # itself, so start the real login attempt with a clean slate.
+            self.page.context.clear_cookies()
+        else:
+            print("No saved session found.")
+        self.email_login()
+
+    def _is_logged_in(self) -> bool:
+        """
+        Check whether the current cookies are actually authenticated.
+        A stale/corrupt cookie can land on a non-login URL (e.g. a 500 error
+        page) without being logged in, so we also require a response status
+        check and a marker element that only exists for logged-in users.
+        """
+        base_url = os.environ.get("BASE_URL", "https://www.strava.com").rstrip("/")
+        response = self.page.goto(f"{base_url}/dashboard", wait_until="networkidle")
+        human_delay(1.0, 2.0)
+
+        if response is None or not response.ok:
+            return False
+        if "login" in self.page.url:
+            return False
+        return self.page.locator(".user-menu > a").count() > 0
+
+    def save_session(self) -> None:
+        """Persist cookies so future runs can skip the login flow."""
+        try:
+            self.page.context.storage_state(path=self.session_state_path)
+            print(f"Saved session to {self.session_state_path}")
+        except Exception:
+            print("Could not save session state.")
 
     def email_login(self) -> None:
         """
@@ -344,7 +396,8 @@ def main(headless: bool = True) -> None:
         print("Running in DEBUG mode (browser visible)")
 
     kg = KudosGiver(headless=headless)
-    kg.email_login()
+    kg.ensure_logged_in()
+    kg.save_session()
     kg.give_kudos()
 
 
